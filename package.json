@@ -1,5 +1,5 @@
 {
-  "name": "devcert-sanscache",
+  "name": "@magento/devcert",
   "version": "0.4.5",
   "description": "Generate trusted local SSL/TLS certificates for local SSL development",
   "main": "index.js",
@@ -8,9 +8,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/guybedford/devcert.git"
+    "url": "git+https://github.com/magento-research/devcert.git"
   },
-  "author": "Dave Wasmer",
+  "author": "Magento Inc. and Dave Wasmer",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^8.0.50",

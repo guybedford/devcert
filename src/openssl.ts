@@ -1,9 +1,12 @@
-import childProcess = require('child_process');
+import util = require('util');
+import { exec } from './child_process-promisified';
 import path = require('path');
 import os = require('os');
-import rimraf = require('rimraf');
-import fs = require('fs');
+import _rimraf = require('rimraf');
+import * as fs from './fs-promisified';
 import mkdirp = require('mkdirp');
+
+const rimraf = util.promisify(_rimraf);
 
 // simple temp file pathing, requires manual removal
 let tmpPrefix, tmpFiles;
@@ -21,11 +24,11 @@ export function tmpFile (name: string) {
   return tmpFileUnique;
 }
 
-export function tmpClear () {
+export async function tmpClear () {
   if (tmpFiles) {
     for (let tmpFile of tmpFiles) {
       try {
-        fs.unlinkSync(tmpFile);
+        await fs.unlink(tmpFile);
       }
       catch (_e) {}
     }
@@ -33,10 +36,10 @@ export function tmpClear () {
 }
 
 let rndFile;
-function openssl (cmd: string) {
+async function openssl (cmd: string) {
   if (!rndFile)
     rndFile = tmpFile('rnd');
-  childProcess.execSync(`openssl ${ cmd }`, {
+    return exec(`openssl ${ cmd }`, {
     stdio: 'ignore',
     env: Object.assign({
       RANDFILE: rndFile
@@ -118,45 +121,62 @@ IP.1 = 127.0.0.1
 IP.2 = fe80::1
 `;
 
-export function generateOpensslConf (commonName: string) {
+export async function generateOpensslConf (commonName: string): Promise<string> {
   const opensslConfPath = tmpFile('openssl.conf');
   const databasePath = tmpFile('index.txt');
   const serialPath = tmpFile('serial');
   const opensslConf = opensslConfTemplate({ commonName, databasePath, serialPath });
-  fs.writeFileSync(opensslConfPath, normalizeLinebreaks(opensslConf));
-  fs.writeFileSync(databasePath, '');
-  fs.writeFileSync(serialPath, Math.round(Math.random() * 16 ** 10).toString(16));
+  await Promise.all([
+    fs.writeFile(opensslConfPath, normalizeLinebreaks(opensslConf)),
+    fs.writeFile(databasePath, ''),
+    fs.writeFile(serialPath, Math.round(Math.random() * 16 ** 10).toString(16))
+  ]);
   return opensslConfPath;
 }
 
-export function generateKey (): string {
+// cache the root CA in memory so it can sign without further prompting for the
+// rest of this process lifetime
+let cachedKey: string;
+let cachedCert: string;
+
+export async function generateKey (): Promise<string> {
   const keyFile = tmpFile('key');
-  openssl(`genrsa -out ${keyFile} 2048`);
-  fs.chmodSync(keyFile, 400);
+  if (cachedKey) {
+    await fs.writeFile(keyFile, cachedKey, { mode: 400, encoding: 'utf8' });
+  } else {
+    await openssl(`genrsa -out ${keyFile} 2048`);
+    cachedKey = await fs.readFile(keyFile, 'utf8');
+    await fs.chmod(keyFile, 400);
+  }
   return keyFile;
 }
 
-export function generateRootCertificate (commonName: string, opensslConfPath: string) {
+export async function generateRootCertificate (commonName: string, opensslConfPath: string) {
   const rootCertPath = tmpFile(`${commonName}.crt`);
-  const rootKeyPath = generateKey();
-  openssl(`req -config ${opensslConfPath} -key ${rootKeyPath} -out ${rootCertPath} -new -subj "/CN=${commonName}" -x509 -days 7000 -extensions v3_ca`);
+  const rootKeyPath = await generateKey();
+  if (cachedCert) {
+    await fs.writeFile(rootCertPath, cachedCert);
+  } else {
+    await openssl(`req -config ${opensslConfPath} -key ${rootKeyPath} -out ${rootCertPath} -new -subj "/CN=${commonName}" -x509 -days 7000 -extensions v3_ca`);
+    cachedCert = await fs.readFile(rootCertPath, 'utf8');
+  }
   return { rootKeyPath, rootCertPath };
 }
 
-export function generateSignedCertificate (commonName: string, opensslConfPath: string, rootKeyPath: string, caPath: string) {
-  const keyPath = generateKey();
+export async function generateSignedCertificate (commonName: string, opensslConfPath: string, rootKeyPath: string, caPath: string) {
+  const keyPath = await generateKey();
   process.env.SAN = commonName;
   const csrFile = tmpFile(`${commonName}.csr`);
-  openssl(`req -config ${ opensslConfPath } -subj "/CN=${commonName}" -key ${keyPath} -out ${csrFile} -new`);
+  await openssl(`req -config ${ opensslConfPath } -subj "/CN=${commonName}" -key ${keyPath} -out ${csrFile} -new`);
   const certPath = tmpFile(`${commonName}.crt`);
   
   // needed but not used (see https://www.mail-archive.com/openssl-users@openssl.org/msg81098.html)
   const caCertsDir = path.join(os.tmpdir(), Math.round(Math.random() * 36 ** 10).toString(36));
   mkdirp.sync(caCertsDir);
 
-  openssl(`ca -config ${opensslConfPath} -in ${csrFile} -out ${certPath} -outdir ${caCertsDir} -keyfile ${rootKeyPath} -cert ${caPath} -notext -md sha256 -days 7000 -batch -extensions server_cert`)
+  await openssl(`ca -config ${opensslConfPath} -in ${csrFile} -out ${certPath} -outdir ${caCertsDir} -keyfile ${rootKeyPath} -cert ${caPath} -notext -md sha256 -days 7000 -batch -extensions server_cert`);
 
-  rimraf.sync(caCertsDir);
+  await rimraf(caCertsDir);
 
   return { keyPath, certPath, caPath };
 }
