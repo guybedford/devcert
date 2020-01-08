@@ -6,7 +6,7 @@ import fs = require('fs');
 export default async function generateDevCert (commonName: string) {
   if (!commandExists.sync('openssl'))
     throw new Error('Unable to find openssl - make sure it is installed and available in your PATH');
-  if (!commonName.match(/^(.|\.){1,64}$/))
+  if (!commonName.match(/^(a-zA-Z0-9|\.){1,64}$/))
     throw new Error(`Invalid Common Name ${commonName}.`);
   try {
     const opensslConfPath = generateOpensslConf(commonName);
