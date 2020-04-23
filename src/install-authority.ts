@@ -106,10 +106,10 @@ async function addCertificateToNSSCertDB (commonName: string, rootCertPath: stri
   }
 
   glob.sync(nssDirGlob).forEach(potentialNSSDBDir => {
-    if (existsSync(path.join(potentialNSSDBDir, 'cert8.db')))
-      execSync(`${certutilPath} -A -d "${potentialNSSDBDir}" -t 'C,,' -i ${rootCertPath} -n ${commonName}`);
-    else if (existsSync(path.join(potentialNSSDBDir, 'cert9.db')))
+    if (existsSync(path.join(potentialNSSDBDir, 'cert9.db')))
       execSync(`${certutilPath} -A -d "sql:${potentialNSSDBDir}" -t 'C,,' -i ${rootCertPath} -n ${commonName}`);
+    else if (existsSync(path.join(potentialNSSDBDir, 'cert8.db')))
+      execSync(`${certutilPath} -A -d "${potentialNSSDBDir}" -t 'C,,' -i ${rootCertPath} -n ${commonName}`);
   });
 }
 
