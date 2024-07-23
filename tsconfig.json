@@ -3,7 +3,7 @@
     "noUnusedParameters": true,
     "noUnusedLocals": true,
     "typeRoots": ["node_modules/@types"],
-    "module": "commonjs",
+    "module": "node16",
     "target": "esnext",
     "noImplicitAny": false,
     "sourceMap": true,

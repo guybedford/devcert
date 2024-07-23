@@ -1,13 +1,13 @@
 import { readFileSync, existsSync } from 'fs';
 import { exec, execSync } from 'child_process';
-import http = require('http');
-import path = require('path');
-import getPort = require('get-port');
-import commandExists = require('command-exists');
-import glob = require('glob');
+import http from 'node:http';
+import path from 'node:path';
+import getPort from 'get-port';
+import commandExists from 'command-exists';
+import {glob} from 'glob';
 
 export function waitForUser () {
-  return new Promise((resolve) => {
+  return new Promise<void>((resolve) => {
     function waitHandler () {
       resolve();
       process.stdin.removeListener('data', waitHandler);
