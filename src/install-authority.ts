@@ -137,10 +137,12 @@ function lookupOrInstallCertutil (): string | void {
   if (process.platform === 'darwin') {
     if (commandExists.sync('brew')) {
       let certutilPath: string;
+      if (!isNSSInstalled()) {
+        execSync('brew install nss');
+      }
       try {
         certutilPath = path.join(execSync('brew --prefix nss').toString().trim(), 'bin', 'certutil');
       } catch (e) {
-        execSync('brew install nss');
         certutilPath = path.join(execSync('brew --prefix nss').toString().trim(), 'bin', 'certutil');
       }
       return certutilPath;
@@ -150,5 +152,13 @@ function lookupOrInstallCertutil (): string | void {
     if (!commandExists.sync('certutil'))
       execSync('sudo apt install libnss3-tools');
     return execSync('which certutil').toString().trim();
+  }
+}
+
+function isNSSInstalled(): boolean {
+  try {
+    return execSync('brew list -1').toString().includes('\nnss\n');
+  } catch (e) {
+    return false;
   }
 }
