@@ -1,7 +1,7 @@
-import commandExists = require('command-exists');
-import installAuthority from './install-authority';
-import { generateOpensslConf, generateRootCertificate, generateSignedCertificate, tmpClear } from './openssl';
-import fs = require('fs');
+import commandExists from 'command-exists';
+import installAuthority from './install-authority.js';
+import { generateOpensslConf, generateRootCertificate, generateSignedCertificate, tmpClear } from './openssl.js';
+import fs from 'node:fs';
 
 export default async function generateDevCert (commonName: string) {
   if (!commandExists.sync('openssl'))

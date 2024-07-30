@@ -1,9 +1,8 @@
-import childProcess = require('child_process');
-import path = require('path');
-import os = require('os');
-import rimraf = require('rimraf');
-import fs = require('fs');
-import mkdirp = require('mkdirp');
+import childProcess from 'node:child_process';
+import path from 'node:path';
+import os from 'node:os';
+import {rimraf} from 'rimraf';
+import fs from 'node:fs';
 
 // simple temp file pathing, requires manual removal
 let tmpPrefix, tmpFiles;
@@ -33,10 +32,10 @@ export function tmpClear () {
 }
 
 let rndFile;
-function openssl (cmd: string) {
+function openssl (args: string[]) {
   if (!rndFile)
     rndFile = tmpFile('rnd');
-  childProcess.execSync(`openssl ${ cmd }`, {
+  childProcess.execFileSync('openssl', args, {
     stdio: 'ignore',
     env: Object.assign({
       RANDFILE: rndFile
@@ -131,7 +130,7 @@ export function generateOpensslConf (commonName: string) {
 
 export function generateKey (): string {
   const keyFile = tmpFile('key');
-  openssl(`genrsa -out ${keyFile} 2048`);
+  openssl(['genrsa', '-out', keyFile, '2048']);
   fs.chmodSync(keyFile, 400);
   return keyFile;
 }
@@ -139,7 +138,7 @@ export function generateKey (): string {
 export function generateRootCertificate (commonName: string, opensslConfPath: string) {
   const rootCertPath = tmpFile(`${commonName}.crt`);
   const rootKeyPath = generateKey();
-  openssl(`req -config ${opensslConfPath} -key ${rootKeyPath} -out ${rootCertPath} -new -subj "/CN=${commonName}" -x509 -days 825 -extensions v3_ca`);
+  openssl(['req', '-config', opensslConfPath, '-key', rootKeyPath, '-out', rootCertPath, '-new', '-subj', `/CN=${commonName}`, '-x509', '-days', '825', '-extensions', 'v3_ca']);
   return { rootKeyPath, rootCertPath };
 }
 
@@ -147,14 +146,15 @@ export function generateSignedCertificate (commonName: string, opensslConfPath: 
   const keyPath = generateKey();
   process.env.SAN = commonName;
   const csrFile = tmpFile(`${commonName}.csr`);
-  openssl(`req -config ${ opensslConfPath } -subj "/CN=${commonName}" -key ${keyPath} -out ${csrFile} -new`);
+  openssl(['req', '-config', opensslConfPath, '-subj', `/CN=${commonName}`, '-key', keyPath, '-out', csrFile, '-new']);
   const certPath = tmpFile(`${commonName}.crt`);
   
   // needed but not used (see https://www.mail-archive.com/openssl-users@openssl.org/msg81098.html)
   const caCertsDir = path.join(os.tmpdir(), Math.round(Math.random() * 36 ** 10).toString(36));
-  mkdirp.sync(caCertsDir);
+  
+  fs.mkdirSync(caCertsDir, {recursive: true});
 
-  openssl(`ca -config ${opensslConfPath} -in ${csrFile} -out ${certPath} -outdir ${caCertsDir} -keyfile ${rootKeyPath} -cert ${caPath} -notext -md sha256 -days 825 -batch -extensions server_cert`)
+  openssl(['ca', '-config', opensslConfPath, '-in', csrFile, '-out', certPath, '-outdir', caCertsDir, '-keyfile', rootKeyPath, '-cert', caPath, '-notext', '-md', 'sha256', '-days', '825', '-batch', '-extensions', 'server_cert'])
 
   rimraf.sync(caCertsDir);
 

@@ -1,8 +1,17 @@
 {
   "name": "devcert-sanscache",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "description": "Generate trusted local SSL/TLS certificates for local SSL development",
-  "main": "index.js",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      }
+    }
+  },
   "scripts": {
     "prepublish": "tsc"
   },
@@ -10,17 +19,19 @@
     "type": "git",
     "url": "git+https://github.com/guybedford/devcert.git"
   },
+  "engines": {
+    "node": "^14.13.1 || >=16.0.0"
+  },
   "author": "Dave Wasmer",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^8.0.50",
-    "typescript": "^2.6.1"
+    "@types/node": "20.11.0",
+    "typescript": "^5.5.4"
   },
   "dependencies": {
-    "command-exists": "^1.2.2",
-    "get-port": "^3.0.0",
-    "glob": "^7.1.1",
-    "mkdirp": "^0.5.1",
-    "rimraf": "^2.6.2"
+    "command-exists": "^1.2.9",
+    "get-port": "^6.1.2",
+    "glob": "^10.4.5",
+    "rimraf": "^5.0.9"
   }
 }

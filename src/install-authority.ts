@@ -1,13 +1,13 @@
 import { readFileSync, existsSync } from 'fs';
-import { exec, execSync } from 'child_process';
-import http = require('http');
-import path = require('path');
-import getPort = require('get-port');
-import commandExists = require('command-exists');
-import glob = require('glob');
+import { execFile, execFileSync } from 'child_process';
+import http from 'node:http';
+import path from 'node:path';
+import getPort from 'get-port';
+import commandExists from 'command-exists';
+import {glob} from 'glob';
 
 export function waitForUser () {
-  return new Promise((resolve) => {
+  return new Promise<void>((resolve) => {
     function waitHandler () {
       resolve();
       process.stdin.removeListener('data', waitHandler);
@@ -38,7 +38,7 @@ export default function installCertificateAuthority (commonName: string, rootCer
 // `nss` Homebrew package, otherwise we go manual with user-facing prompts.
 async function addToMacTrustStores (commonName: string, rootCertPath: string): Promise<void> {
   // Chrome, Safari, system utils
-  execSync(`sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain -p ssl -p basic "${rootCertPath}"`);
+  execFileSync('sudo', ['security', 'add-trusted-cert', '-d', '-r', 'trustRoot', '-k', '/Library/Keychains/System.keychain', '-p', 'ssl', '-p', 'basic', rootCertPath]);
   // Firefox
   try {
     // Try to use certutil to install the cert automatically
@@ -57,9 +57,9 @@ async function addToMacTrustStores (commonName: string, rootCertPath: string): P
 // opening certs, if we can't use certutil, we're out of luck.
 async function addToLinuxTrustStores (commonName: string, rootCertPath: string): Promise<void> {
   // system utils
-  execSync(`sudo cp ${rootCertPath} /etc/ssl/certs/${commonName}.pem}`);
-  execSync(`sudo cp ${rootCertPath} /usr/local/share/ca-certificates/${commonName}.crt`);
-  execSync(`sudo update-ca-certificates`);
+  execFileSync('sudo', ['cp', rootCertPath, `/etc/ssl/certs/${commonName}.pem}`]);
+  execFileSync('sudo', ['cp', rootCertPath, `/usr/local/share/ca-certificates/${commonName}.crt`]);
+  execFileSync('sudo', ['update-ca-certificates']);
   // Firefox
   try {
     // Try to use certutil to install the cert automatically
@@ -81,7 +81,7 @@ async function addToLinuxTrustStores (commonName: string, rootCertPath: string):
 async function addToWindowsTrustStores (rootCertPath: string): Promise<void> {
   // IE, Chrome, system utils
   try {
-    execSync(`certutil -addstore -user root ${rootCertPath}`);
+    execFileSync('certutil', ['-addstore', '-user', 'root', rootCertPath]);
   }
   catch (e) {}
   // Firefox (don't even try NSS certutil, no easy install for Windows)
@@ -98,7 +98,7 @@ async function addCertificateToNSSCertDB (commonName: string, rootCertPath: stri
   // Firefox appears to load the NSS database in-memory on startup, and overwrite on exit. So we
   // have to ask the user to quite Firefox first so our changes don't get overwritten.
   if (checkForOpenFirefox) {
-    let runningProcesses = execSync('ps aux');
+    let runningProcesses = execFileSync('ps', ['aux']);
     if (runningProcesses.indexOf('firefox') > -1) {
       console.log('Please close Firefox\nPress <Enter> when ready');
       await waitForUser();
@@ -107,9 +107,9 @@ async function addCertificateToNSSCertDB (commonName: string, rootCertPath: stri
 
   glob.sync(nssDirGlob).forEach(potentialNSSDBDir => {
     if (existsSync(path.join(potentialNSSDBDir, 'cert8.db')))
-      execSync(`${certutilPath} -A -d "${potentialNSSDBDir}" -t 'C,,' -i ${rootCertPath} -n ${commonName}`);
+      execFileSync(certutilPath, ['-A', '-d', potentialNSSDBDir, '-t', `C,,`, '-i', rootCertPath, '-n', commonName]);
     else if (existsSync(path.join(potentialNSSDBDir, 'cert9.db')))
-      execSync(`${certutilPath} -A -d "sql:${potentialNSSDBDir}" -t 'C,,' -i ${rootCertPath} -n ${commonName}`);
+      execFileSync(certutilPath, ['-A', '-d', `sql:${potentialNSSDBDir}`, '-t', `C,,`, '-i', rootCertPath, '-n', commonName]);
   });
 }
 
@@ -127,7 +127,7 @@ async function openCertificateInFirefox(rootCertPath: string, firefoxPath: strin
   }).listen(port);
   console.log(`If using Firefox, a Firefox window will be opened for authorization.\nTick the "Trust this CA to identify websites" option and then confirm.\nPress <Enter> to continue.`);
   await waitForUser();
-  exec(`${firefoxPath} http://localhost:${port}`);
+  execFile(firefoxPath, [`http://localhost:${port}`]);
   console.log(`Press <Enter> once confirmed (or to skip)`);
   await waitForUser();
 }
@@ -137,18 +137,28 @@ function lookupOrInstallCertutil (): string | void {
   if (process.platform === 'darwin') {
     if (commandExists.sync('brew')) {
       let certutilPath: string;
+      if (!isNSSInstalled()) {
+        execFileSync('brew', ['install', 'nss']);
+      }
       try {
-        certutilPath = path.join(execSync('brew --prefix nss').toString().trim(), 'bin', 'certutil');
+        certutilPath = path.join(execFileSync('brew', ['--prefix', 'nss']).toString().trim(), 'bin', 'certutil');
       } catch (e) {
-        execSync('brew install nss');
-        certutilPath = path.join(execSync('brew --prefix nss').toString().trim(), 'bin', 'certutil');
+        certutilPath = path.join(execFileSync('brew', ['--prefix', 'nss']).toString().trim(), 'bin', 'certutil');
       }
       return certutilPath;
     }
   }
   else if (process.platform === 'linux') {
     if (!commandExists.sync('certutil'))
-      execSync('sudo apt install libnss3-tools');
-    return execSync('which certutil').toString().trim();
+      execFileSync('sudo', ['apt', 'install', 'libnss3-tools']);
+    return execFileSync('which', ['certutil']).toString().trim();
+  }
+}
+
+function isNSSInstalled(): boolean {
+  try {
+    return execFileSync('brew', ['list', '-1']).toString().includes('\nnss\n');
+  } catch (e) {
+    return false;
   }
 }
