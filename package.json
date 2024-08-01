@@ -1,6 +1,6 @@
 {
   "name": "devcert-sanscache",
-  "version": "0.4.8",
+  "version": "0.5.1",
   "description": "Generate trusted local SSL/TLS certificates for local SSL development",
   "type": "module",
   "exports": {
